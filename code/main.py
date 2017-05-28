@@ -1,24 +1,40 @@
 import tensorflow as tf
 import pandas as pd
+import numpy as np
 
-filename_queue = tf.train.string_input_producer(["../data/train_2016.csv", "../data/train_2016/properties_2016.csv"])
-reader = tf.TextLineReader()
-label, features = reader.read(filename_queue)
 
-# Default values, in case of empty columns. Also specifies the type of the
-# decoded result.
-record_defaults = [[1], [1], [1]]
-col1, col2, col3 = tf.decode_csv(label, record_defaults=record_defaults)
-features = tf.stack([col1, col3])
+def input_fn(data_set, features, label):
+    feature_cols = {}
+    for k in features:
+        #print data_set[k].values
+        feature_cols[k] = tf.constant(data_set[k].values)
+    #feature_cols = {k: tf.constant(data_set[k].values) for k in features}
+    labels = tf.constant(data_set[label].values)
+    return feature_cols, labels
 
-with tf.Session() as sess:
-    # Start populating the filename queue.
-    coord = tf.train.Coordinator()
-    threads = tf.train.start_queue_runners(coord=coord)
 
-    for i in range(1200):
-        # Retrieve a single instance:
-        example, label = sess.run([features, col2])
+labelname = '../data/train_2016.csv'
+featuresname = "../data/properties_2016.csv"
 
-    coord.request_stop()
-    coord.join(threads)
+label = pd.read_csv(labelname)
+features = pd.read_csv(featuresname)
+date = range(len(np.unique(label.transactiondate)))
+label.transactiondate.replace(np.unique(label.transactiondate), date, inplace = True)
+
+df = label.merge(features, on = 'parcelid', how = 'left')
+featurelist = features.columns.tolist()
+featurelist.remove('propertycountylandusecode')
+featurelist.remove('propertyzoningdesc')
+featurelist.remove('taxdelinquencyflag')
+featurelist = ['airconditioningtypeid', 'architecturalstyletypeid', 'basementsqft', 'bathroomcnt', 'bedroomcnt', 'buildingclasstypeid', 'buildingqualitytypeid']
+df.fillna(-100,inplace = True)
+
+feature_cols = [tf.contrib.layers.real_valued_column(k) for k in featurelist]
+regressor = tf.contrib.learn.DNNRegressor(feature_columns=feature_cols,
+                                          hidden_units=[len(feature_cols)+1, 10],
+                                          model_dir="zillow_model")
+
+regressor.fit(input_fn=lambda: input_fn(df[df.transactiondate < 250], featurelist, 'logerror'), steps=5000)
+ev = regressor.evaluate(input_fn=lambda: input_fn(df[df.transactiondate >= 250], featurelist, 'logerror'), steps=1)
+loss_score = ev["loss"]
+print("Loss: {0:f}".format(loss_score))
