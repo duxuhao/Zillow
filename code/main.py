@@ -55,11 +55,11 @@ regressor = tf.contrib.learn.DNNRegressor(feature_columns=feature_cols,
                                           )
 
 start = time.time()
-seperatetime = 400
+seperatetime = 300
 regressor.fit(input_fn=lambda: input_fn(df[df.transactiondate < seperatetime]), steps=5000)
-'''
+
 ev = regressor.evaluate(input_fn=lambda: input_fn(df[df.transactiondate >= seperatetime]), steps=1)
-loss_score = ev["loss"]
+loss_score = ev["mae"]
 print("Loss: {0:f}\nused time:{1}".format(loss_score,time.time()-start))
-'''
-pred(regressor, sub,pre, 'test.csv')
+
+#pred(regressor, sub,pre, 'test.csv')
